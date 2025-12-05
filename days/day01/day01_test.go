@@ -1,8 +1,6 @@
 package day01
 
 import (
-	"io"
-	"log"
 	"os"
 	"strings"
 	"testing"
@@ -19,13 +17,13 @@ L99
 R14
 L82`
 
-func readInput() io.ReadCloser {
-	file, err := os.Open("input.txt")
+func readInput() string {
+	data, err := os.ReadFile("input.txt")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	return file
+	return string(data)
 }
 
 func TestDay01Part1Example(t *testing.T) {
@@ -39,8 +37,7 @@ func TestDay01Part1Example(t *testing.T) {
 }
 
 func TestDay01Part1(t *testing.T) {
-	input := readInput()
-	defer input.Close()
+	input := strings.NewReader(readInput())
 	solution := SolvePart1(ParseInput(input))
 
 	answer := 1123
@@ -60,12 +57,27 @@ func TestDay01Part2Example(t *testing.T) {
 }
 
 func TestDay01Part2(t *testing.T) {
-	input := readInput()
-	defer input.Close()
+	input := strings.NewReader(readInput())
 	solution := SolvePart2(ParseInput(input))
 
 	answer := 6695
 	if solution != answer {
 		t.Errorf("Part 2: expected %d, got %d", answer, solution)
+	}
+}
+
+func BenchmarkDay01Part1(b *testing.B) {
+	input := readInput()
+
+	for b.Loop() {
+		SolvePart1(ParseInput(strings.NewReader(input)))
+	}
+}
+
+func BenchmarkDay01Part2(b *testing.B) {
+	input := readInput()
+
+	for b.Loop() {
+		SolvePart2(ParseInput(strings.NewReader(input)))
 	}
 }

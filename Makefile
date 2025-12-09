@@ -1,7 +1,7 @@
 .PHONY: test
-test: days/*
-	go test -v $(addprefix ./, $^)
+test:
+	go test ./days/...
 
 .PHONY: bench
-bench: days/*
-	go test -bench=. -v $(addprefix ./, $^)
+bench:
+	go test -bench=. -benchtime=2s -cpu=1 ./days/...

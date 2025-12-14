@@ -54,11 +54,7 @@ func TestDay10Part2(t *testing.T) {
 	input := strings.NewReader(readInput())
 	solution := SolvePart2(ParseInput(input))
 
-	if solution >= 17754 {
-		t.Errorf("Part 2: expected less than %d, got %d", 17754, solution)
-	}
-
-	answer := -1
+	answer := 17424
 	if solution != answer {
 		t.Errorf("Part 2: expected %d, got %d", answer, solution)
 	}

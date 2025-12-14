@@ -34,38 +34,6 @@ func generatePermutations[T any](items []T) iter.Seq[[]T] {
 	}
 }
 
-func generateVectorCombinations(length int) iter.Seq[[]int] {
-	return func(yield func([]int) bool) {
-		vec := make([]int, length)
-
-		var generate func(pos, maxVal int, hasMax bool) bool
-		generate = func(pos, maxVal int, hasMax bool) bool {
-			if pos >= length {
-				if hasMax {
-					result := make([]int, len(vec))
-					copy(result, vec)
-					return yield(result)
-				}
-				return true
-			}
-
-			for val := 0; val <= maxVal; val++ {
-				vec[pos] = val
-				if !generate(pos+1, maxVal, hasMax || val == maxVal) {
-					return false
-				}
-			}
-			return true
-		}
-
-		for maxVal := 0; ; maxVal++ {
-			if !generate(0, maxVal, false) {
-				return
-			}
-		}
-	}
-}
-
 func SolvePart1(input Input) int {
 	buttonPresses := 0
 
@@ -94,19 +62,17 @@ func SolvePart1(input Input) int {
 	return buttonPresses
 }
 
-// (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+type Matrix [][]float64
 
-//  N = A + B + C + D + E
-//
-//  7 = A     + C + D
-//  5 =             D + E
-// 12 = A + B     + D + E
-//  7 = A + B         + E
-//  2 = A     + C     + E
+func NewMatrix(rows, cols int) Matrix {
+	m := make(Matrix, rows)
+	for i := range m {
+		m[i] = make([]float64, cols)
+	}
+	return m
+}
 
-type Matrix[T comparable] [][]T
-
-func (m Matrix[T]) String() string {
+func (m Matrix) String() string {
 	var sb strings.Builder
 	for _, row := range m {
 		for _, val := range row {
@@ -117,17 +83,16 @@ func (m Matrix[T]) String() string {
 	return sb.String()
 }
 
-func (m Matrix[T]) SortRows() {
-	slices.SortStableFunc(m, func(a, b []T) int {
-		var zero T
+func (m Matrix) SortRows() {
+	slices.SortStableFunc(m, func(a, b []float64) int {
 		for i := range a {
-			if a[i] == zero && b[i] == zero {
+			if a[i] == 0 && b[i] == 0 {
 				continue
 			}
-			if a[i] != zero {
+			if a[i] != 0 {
 				return -1
 			}
-			if b[i] != zero {
+			if b[i] != 0 {
 				return 1
 			}
 		}
@@ -135,15 +100,125 @@ func (m Matrix[T]) SortRows() {
 	})
 }
 
+func IterateGuesses(equation []float64, solutions []float64, maxSum *int) iter.Seq[[]float64] {
+	unsolvedInEquation := make([]int, 0, len(equation))
+	for i, val := range equation[:len(equation)-1] {
+		if val != 0 && solutions[i] < 0 {
+			unsolvedInEquation = append(unsolvedInEquation, i)
+		}
+	}
+
+	if len(unsolvedInEquation) == 0 {
+		return func(yield func([]float64) bool) {
+			sum := equation[len(equation)-1] // constant term
+			for i, val := range equation[:len(equation)-1] {
+				if val != 0 {
+					sum += val * solutions[i]
+				}
+			}
+			if sum == 0 {
+				result := make([]float64, len(solutions))
+				copy(result, solutions)
+				yield(result)
+			}
+		}
+	}
+
+	constantTerm := equation[len(equation)-1]
+
+	currentSum := 0
+	for i := 0; i < len(solutions)-1; i++ {
+		if solutions[i] >= 0 {
+			currentSum += int(solutions[i])
+		}
+	}
+
+	return func(yield func([]float64) bool) {
+		state := make([]float64, len(solutions))
+		copy(state, solutions)
+
+		fixedSum := 0.0
+		for i := 0; i < len(equation)-1; i++ {
+			if equation[i] != 0 && state[i] >= 0 {
+				fixedSum += equation[i] * state[i]
+			}
+		}
+
+		pivotIdx := unsolvedInEquation[0]
+		pivotCoeff := equation[pivotIdx]
+
+		freeVars := unsolvedInEquation[1:]
+
+		var gen func(depth int, runningSum int) bool
+		gen = func(depth int, runningSum int) bool {
+			if maxSum != nil && *maxSum >= 0 && runningSum > *maxSum {
+				return true
+			}
+
+			if depth == len(freeVars) {
+				sum := fixedSum + constantTerm
+				for _, idx := range freeVars {
+					sum += equation[idx] * state[idx]
+				}
+
+				pivot := -sum / pivotCoeff
+				rounded := float64(int(pivot + 0.5))
+				if pivot < 0 || pivot != rounded {
+					return true
+				}
+
+				if maxSum != nil && *maxSum >= 0 && runningSum+int(pivot) > *maxSum {
+					return true
+				}
+
+				state[pivotIdx] = pivot
+				result := make([]float64, len(state))
+				copy(result, state)
+				return yield(result)
+			}
+
+			freeIdx := freeVars[depth]
+			freeCoeff := equation[freeIdx]
+
+			var maxVal float64 = -1
+			if maxSum != nil && *maxSum >= 0 {
+				maxVal = float64(*maxSum - runningSum)
+			}
+
+			for val := 0.0; maxVal < 0 || val <= maxVal; val++ {
+				state[freeIdx] = val
+
+				if !gen(depth+1, runningSum+int(val)) {
+					return false
+				}
+
+				sum := fixedSum + constantTerm
+				for _, idx := range freeVars {
+					sum += equation[idx] * state[idx]
+				}
+				pivot := -sum / pivotCoeff
+
+				if pivot < 0 && (freeCoeff/pivotCoeff) > 0 {
+					break
+				}
+			}
+
+			state[freeIdx] = -1
+			return true
+		}
+
+		gen(0, currentSum)
+	}
+}
+
 func SolvePart2(input Input) int {
-	buttonPresses := 0
+	totalButtonPresses := 0
 
 	for _, machine := range input {
-		matrix := make(Matrix[int], len(machine.Joltage))
+		matrix := NewMatrix(len(machine.Joltage), len(machine.Buttons)+1)
 
 		for i := range matrix {
-			matrix[i] = make([]int, len(machine.Buttons)+1)
-			matrix[i][len(machine.Buttons)] = -int(machine.Joltage[i])
+			matrix[i][len(machine.Buttons)] = -float64(machine.Joltage[i])
 		}
 
 		for idx, button := range machine.Buttons {
@@ -152,13 +227,11 @@ func SolvePart2(input Input) int {
 			}
 		}
 
-		fmt.Printf("Matrix:\n%v\n", matrix)
-
 	RowLoop:
 		for rowIdx := 0; rowIdx < len(matrix)-1; rowIdx++ {
 			matrix.SortRows()
 
-			pivotIdx := slices.IndexFunc(matrix[rowIdx], func(val int) bool { return val != 0 })
+			pivotIdx := slices.IndexFunc(matrix[rowIdx], func(val float64) bool { return val != 0 })
 			if pivotIdx < 0 {
 				break RowLoop
 			}
@@ -179,90 +252,78 @@ func SolvePart2(input Input) int {
 			}
 		}
 
-		// make leading coefficients positive
-		for rowIdx := 0; rowIdx < len(matrix); rowIdx++ {
-			pivotIdx := slices.IndexFunc(matrix[rowIdx], func(val int) bool { return val != 0 })
-			if pivotIdx < 0 {
-				break
-			}
-
-			if matrix[rowIdx][pivotIdx] < 0 {
-				for k := pivotIdx; k < len(matrix[rowIdx]); k++ {
-					matrix[rowIdx][k] = -matrix[rowIdx][k]
-				}
-			}
-		}
-		fmt.Printf("Echelon Matrix:\n%v\n", matrix)
-
-		answerVector := make([]int, len(machine.Buttons)+1)
-		answerVector[len(answerVector)-1] = 1
-		for i := range answerVector[:len(answerVector)-1] {
-			answerVector[i] = -1
+		// Start with unknown solution vector (-1 means unsolved)
+		initialSolution := make([]float64, len(machine.Buttons)+1)
+		initialSolution[len(initialSolution)-1] = 1 // constant multiplier
+		for i := range initialSolution[:len(initialSolution)-1] {
+			initialSolution[i] = -1
 		}
 
-		// Back substitution
-		for rowIdx := len(matrix) - 1; rowIdx >= 0; rowIdx-- {
-			pivotIdx := slices.IndexFunc(matrix[rowIdx], func(val int) bool { return val != 0 })
-			if pivotIdx < 0 || pivotIdx >= len(machine.Buttons) {
-				continue
-			}
-
-			freeVariable := false
-			sum := 0
-			for colIdx := pivotIdx + 1; colIdx < len(answerVector); colIdx++ {
-				if matrix[rowIdx][colIdx] != 0 && answerVector[colIdx] < 0 {
-					freeVariable = true
-					continue
-				}
-				sum += matrix[rowIdx][colIdx] * answerVector[colIdx]
-			}
-
-			if !freeVariable {
-				answerVector[pivotIdx] = -sum / matrix[rowIdx][pivotIdx]
-			}
-		}
-
-		freeVariableIndices := make([]int, 0, len(answerVector))
-		for i, val := range answerVector[:len(answerVector)-1] {
-			if val < 0 {
-				freeVariableIndices = append(freeVariableIndices, i)
-			}
-		}
-		fmt.Printf("Answer vector: %v\n", answerVector)
-
-		for combination := range generateVectorCombinations(len(freeVariableIndices)) {
-			for i, freeVarIdx := range freeVariableIndices {
-				answerVector[freeVarIdx] = combination[i]
-			}
-
-			valid := true
-			for rowIdx := 0; rowIdx < len(matrix); rowIdx++ {
-				sum := 0
-				for colIdx := 0; colIdx < len(answerVector); colIdx++ {
-					sum += matrix[rowIdx][colIdx] * answerVector[colIdx]
-				}
-				if sum != 0 {
-					valid = false
+		// Find the last non-zero row
+		lastNonZeroRow := len(matrix) - 1
+		for lastNonZeroRow >= 0 {
+			allZero := true
+			for _, val := range matrix[lastNonZeroRow] {
+				if val != 0 {
+					allZero = false
 					break
 				}
 			}
-
-			if valid {
+			if !allZero {
 				break
 			}
+			lastNonZeroRow--
 		}
-		fmt.Printf("Combination chosen: %v\n", answerVector)
 
-		// expected [5, 0, 5, 1]
+		numCols := len(matrix[0])
+		initialBound := 0
+		for row := 0; row <= lastNonZeroRow; row++ {
+			constantTerm := matrix[row][numCols-1]
+			if constantTerm < 0 {
+				initialBound += int(-constantTerm)
+			} else {
+				initialBound += int(constantTerm)
+			}
+		}
+		minForMachine := initialBound
+		foundSolution := false
+		var solveFromRow func(rowIdx int, currentSolution []float64) bool
+		solveFromRow = func(rowIdx int, currentSolution []float64) bool {
+			if minForMachine >= 0 {
+				partialSum := 0
+				for i := 0; i < len(currentSolution)-1; i++ {
+					if currentSolution[i] >= 0 {
+						partialSum += int(currentSolution[i])
+					}
+				}
+				if partialSum > minForMachine {
+					return true
+				}
+			}
 
-		// c = 5
-		// b = 1 + d
-		// a = 5 - b
+			if rowIdx < 0 {
+				total := 0
+				for i := 0; i < len(currentSolution)-1; i++ {
+					total += int(currentSolution[i])
+				}
+				foundSolution = true
+				if minForMachine < 0 || total < minForMachine {
+					minForMachine = total
+				}
+				return true
+			}
 
-		for _, presses := range answerVector[:len(answerVector)-1] {
-			buttonPresses += int(presses)
+			for solution := range IterateGuesses(matrix[rowIdx], currentSolution, &minForMachine) {
+				solveFromRow(rowIdx-1, solution)
+			}
+			return true
+		}
+
+		solveFromRow(lastNonZeroRow, initialSolution)
+		if foundSolution && minForMachine > 0 {
+			totalButtonPresses += minForMachine
 		}
 	}
 
-	return buttonPresses
+	return totalButtonPresses
 }

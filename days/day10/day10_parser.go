@@ -11,7 +11,7 @@ import (
 type Machine struct {
 	Lights  uint16
 	Buttons [][]byte
-	Joltage []byte
+	Joltage []uint16
 }
 
 type Input []Machine
@@ -49,12 +49,12 @@ func ParseInput(input io.Reader) Input {
 		}
 
 		joltageRes := joltagePattern.FindStringSubmatch(line)
-		joltage := make([]uint8, 0)
+		joltage := make([]uint16, 0)
 		if len(joltageRes) > 1 {
 			jolts := strings.Split(joltageRes[1], ",")
 			for _, jolt := range jolts {
-				val, _ := strconv.ParseUint(jolt, 10, 8)
-				joltage = append(joltage, byte(val))
+				val, _ := strconv.ParseUint(jolt, 10, 16)
+				joltage = append(joltage, uint16(val))
 			}
 		}
 

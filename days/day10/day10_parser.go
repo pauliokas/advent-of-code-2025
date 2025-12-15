@@ -9,9 +9,9 @@ import (
 )
 
 type Machine struct {
-	Lights  uint16
-	Buttons [][]byte
-	Joltage []uint16
+	Lights  []int
+	Buttons [][]int
+	Joltage []int
 }
 
 type Input []Machine
@@ -29,32 +29,34 @@ func ParseInput(input io.Reader) Input {
 
 		lightsRes := lightsPattern.FindStringSubmatch(line)
 
-		var lights uint16 = 0
-		for i, light := range strings.Split(lightsRes[1], "") {
-			if light == "#" {
-				lights |= 1 << i
+		lights := make([]int, 0, len(lightsRes[1]))
+		for _, light := range lightsRes[1] {
+			if light == '#' {
+				lights = append(lights, 1)
+			} else {
+				lights = append(lights, 0)
 			}
 		}
 
 		buttonsRes := buttonPattern.FindAllStringSubmatch(line, -1)
-		buttons := make([][]byte, 0, len(buttonsRes))
+		buttons := make([][]int, 0, len(buttonsRes))
 		for _, btnGroup := range buttonsRes {
 			individualButtons := strings.Split(btnGroup[1], ",")
-			buttonGroup := make([]byte, 0, len(individualButtons))
+			buttonGroup := make([]int, 0, len(individualButtons))
 			for _, flag := range individualButtons {
-				val, _ := strconv.ParseUint(flag, 10, 8)
-				buttonGroup = append(buttonGroup, byte(val))
+				val, _ := strconv.Atoi(flag)
+				buttonGroup = append(buttonGroup, val)
 			}
 			buttons = append(buttons, buttonGroup)
 		}
 
 		joltageRes := joltagePattern.FindStringSubmatch(line)
-		joltage := make([]uint16, 0)
+		joltage := make([]int, 0)
 		if len(joltageRes) > 1 {
 			jolts := strings.Split(joltageRes[1], ",")
 			for _, jolt := range jolts {
-				val, _ := strconv.ParseUint(jolt, 10, 16)
-				joltage = append(joltage, uint16(val))
+				val, _ := strconv.Atoi(jolt)
+				joltage = append(joltage, val)
 			}
 		}
 
